@@ -24,6 +24,7 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
   getDanmakuFilterConfig,
+  getEpisodeFilterConfig,
 } from '@/lib/db.client';
 import {
   convertDanmakuFormat,
@@ -37,7 +38,7 @@ import {
   initDanmakuModule,
 } from '@/lib/danmaku/api';
 import type { DanmakuAnime, DanmakuSelection, DanmakuSettings } from '@/lib/danmaku/types';
-import { SearchResult, DanmakuFilterConfig } from '@/lib/types';
+import { SearchResult, DanmakuFilterConfig, EpisodeFilterConfig } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
@@ -276,6 +277,8 @@ function PlayPageClient() {
   );
   const [danmakuFilterConfig, setDanmakuFilterConfig] = useState<DanmakuFilterConfig | null>(null);
   const danmakuFilterConfigRef = useRef<DanmakuFilterConfig | null>(null);
+  const [episodeFilterConfig, setEpisodeFilterConfig] = useState<EpisodeFilterConfig | null>(null);
+  const episodeFilterConfigRef = useRef<EpisodeFilterConfig | null>(null);
   const [currentDanmakuSelection, setCurrentDanmakuSelection] =
     useState<DanmakuSelection | null>(null);
   const [danmakuEpisodesList, setDanmakuEpisodesList] = useState<
@@ -316,8 +319,19 @@ function PlayPageClient() {
           setDanmakuFilterConfig(defaultConfig);
           danmakuFilterConfigRef.current = defaultConfig;
         }
+
+        // 加载集数过滤配置
+        const episodeConfig = await getEpisodeFilterConfig();
+        if (episodeConfig) {
+          setEpisodeFilterConfig(episodeConfig);
+          episodeFilterConfigRef.current = episodeConfig;
+        } else {
+          const defaultEpisodeConfig: EpisodeFilterConfig = { rules: [] };
+          setEpisodeFilterConfig(defaultEpisodeConfig);
+          episodeFilterConfigRef.current = defaultEpisodeConfig;
+        }
       } catch (error) {
-        console.error('加载弹幕过滤配置失败:', error);
+        console.error('加载过滤配置失败:', error);
       }
     };
     loadFilterConfig();
@@ -327,6 +341,11 @@ function PlayPageClient() {
   useEffect(() => {
     danmakuFilterConfigRef.current = danmakuFilterConfig;
   }, [danmakuFilterConfig]);
+
+  // 同步集数过滤配置到ref
+  useEffect(() => {
+    episodeFilterConfigRef.current = episodeFilterConfig;
+  }, [episodeFilterConfig]);
 
   // 视频基本信息
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
@@ -2024,14 +2043,60 @@ function PlayPageClient() {
     }
   };
 
+  // 检查集数是否被过滤
+  const isEpisodeFilteredByTitle = (title: string): boolean => {
+    const filterConfig = episodeFilterConfigRef.current;
+    if (!filterConfig || filterConfig.rules.length === 0) {
+      return false;
+    }
+
+    for (const rule of filterConfig.rules) {
+      if (!rule.enabled) continue;
+
+      try {
+        if (rule.type === 'normal' && title.includes(rule.keyword)) {
+          return true;
+        }
+        if (rule.type === 'regex' && new RegExp(rule.keyword).test(title)) {
+          return true;
+        }
+      } catch (e) {
+        console.error('集数过滤规则错误:', e);
+      }
+    }
+    return false;
+  };
+
   const handleNextEpisode = () => {
     const d = detailRef.current;
     const idx = currentEpisodeIndexRef.current;
-    if (d && d.episodes && idx < d.episodes.length - 1) {
-      if (artPlayerRef.current && !artPlayerRef.current.paused) {
-        saveCurrentPlayProgress();
+
+    if (!d || !d.episodes || idx >= d.episodes.length - 1) {
+      return;
+    }
+
+    // 保存当前进度
+    if (artPlayerRef.current && !artPlayerRef.current.paused) {
+      saveCurrentPlayProgress();
+    }
+
+    // 查找下一个未被过滤的集数
+    let nextIdx = idx + 1;
+    while (nextIdx < d.episodes.length) {
+      const episodeTitle = d.episodes_titles?.[nextIdx];
+      const isFiltered = episodeTitle && isEpisodeFilteredByTitle(episodeTitle);
+
+      if (!isFiltered) {
+        setCurrentEpisodeIndex(nextIdx);
+        return;
       }
-      setCurrentEpisodeIndex(idx + 1);
+      nextIdx++;
+    }
+
+    // 所有后续集数都被屏蔽
+    if (artPlayerRef.current) {
+      artPlayerRef.current.notice.show = '后续集数均已屏蔽';
+      artPlayerRef.current.pause();
     }
   };
 
@@ -3331,10 +3396,29 @@ function PlayPageClient() {
 
         const d = detailRef.current;
         const idx = currentEpisodeIndexRef.current;
-        if (d && d.episodes && idx < d.episodes.length - 1) {
-          setTimeout(() => {
-            setCurrentEpisodeIndex(idx + 1);
-          }, 1000);
+
+        if (!d || !d.episodes || idx >= d.episodes.length - 1) {
+          return;
+        }
+
+        // 查找下一个未被过滤的集数
+        let nextIdx = idx + 1;
+        while (nextIdx < d.episodes.length) {
+          const episodeTitle = d.episodes_titles?.[nextIdx];
+          const isFiltered = episodeTitle && isEpisodeFilteredByTitle(episodeTitle);
+
+          if (!isFiltered) {
+            setTimeout(() => {
+              setCurrentEpisodeIndex(nextIdx);
+            }, 1000);
+            return;
+          }
+          nextIdx++;
+        }
+
+        // 所有后续集数都被屏蔽
+        if (artPlayerRef.current) {
+          artPlayerRef.current.notice.show = '后续集数均已屏蔽，已自动停止';
         }
       });
 
@@ -4097,6 +4181,11 @@ function PlayPageClient() {
                 precomputedVideoInfo={precomputedVideoInfo}
                 onDanmakuSelect={handleDanmakuSelect}
                 currentDanmakuSelection={currentDanmakuSelection}
+                episodeFilterConfig={episodeFilterConfig}
+                onFilterConfigUpdate={setEpisodeFilterConfig}
+                onShowToast={(message, type) => {
+                  setToast({ message, type, onClose: () => setToast(null) });
+                }}
               />
             </div>
           </div>

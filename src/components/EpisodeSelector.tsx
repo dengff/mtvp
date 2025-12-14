@@ -8,10 +8,12 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Settings } from 'lucide-react';
 
 import DanmakuPanel from '@/components/DanmakuPanel';
+import EpisodeFilterSettings from '@/components/EpisodeFilterSettings';
 import type { DanmakuSelection } from '@/lib/danmaku/types';
-import { SearchResult } from '@/lib/types';
+import { SearchResult, EpisodeFilterConfig } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
 // 定义视频信息类型
@@ -49,6 +51,10 @@ interface EpisodeSelectorProps {
   currentDanmakuSelection?: DanmakuSelection | null;
   /** 观影室房员状态 - 禁用选集和换源，但保留弹幕 */
   isRoomMember?: boolean;
+  /** 集数过滤配置 */
+  episodeFilterConfig?: EpisodeFilterConfig | null;
+  onFilterConfigUpdate?: (config: EpisodeFilterConfig) => void;
+  onShowToast?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 /**
@@ -71,6 +77,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   onDanmakuSelect,
   currentDanmakuSelection,
   isRoomMember = false,
+  episodeFilterConfig = null,
+  onFilterConfigUpdate,
+  onShowToast,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -121,6 +130,46 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   // 是否倒序显示
   const [descending, setDescending] = useState<boolean>(false);
+
+  // 集数过滤设置弹窗状态
+  const [showFilterSettings, setShowFilterSettings] = useState<boolean>(false);
+
+  // 集数过滤逻辑
+  const isEpisodeFiltered = useCallback(
+    (episodeNumber: number): boolean => {
+      if (!episodeFilterConfig || episodeFilterConfig.rules.length === 0) {
+        return false;
+      }
+
+      // 获取集数标题
+      const title = episodes_titles?.[episodeNumber - 1];
+      if (!title) return false;
+
+      // 检查每个启用的规则
+      for (const rule of episodeFilterConfig.rules) {
+        if (!rule.enabled) continue;
+
+        try {
+          if (rule.type === 'normal') {
+            // 普通模式：字符串包含匹配
+            if (title.includes(rule.keyword)) {
+              return true;
+            }
+          } else if (rule.type === 'regex') {
+            // 正则模式：正则表达式匹配
+            if (new RegExp(rule.keyword).test(title)) {
+              return true;
+            }
+          }
+        } catch (e) {
+          console.error('集数过滤规则错误:', e);
+        }
+      }
+
+      return false;
+    },
+    [episodeFilterConfig, episodes_titles]
+  );
 
   // 根据 descending 状态计算实际显示的分页索引
   const displayPage = useMemo(() => {
@@ -549,6 +598,14 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                 />
               </svg>
             </button>
+            {/* 集数屏蔽配置按钮 */}
+            <button
+              className='flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center text-gray-700 hover:text-green-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-white/20 transition-colors transform translate-y-[-4px]'
+              onClick={() => setShowFilterSettings(true)}
+              title='集数屏蔽设置'
+            >
+              <Settings className='w-4 h-4' />
+            </button>
           </div>
 
           {/* 集数网格 */}
@@ -558,34 +615,37 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               const episodes = Array.from({ length: len }, (_, i) =>
                 descending ? currentEnd - i : currentStart + i
               );
-              return episodes;
-            })().map((episodeNumber) => {
-              const isActive = episodeNumber === value;
-              return (
-                <button
-                  key={episodeNumber}
-                  onClick={() => handleEpisodeClick(episodeNumber - 1)}
-                  className={`h-10 min-w-10 px-3 py-2 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap font-mono
-                    ${isActive
-                      ? 'bg-green-500 text-white shadow-lg shadow-green-500/25 dark:bg-green-600'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20'
-                    }`.trim()}
-                >
-                  {(() => {
-                    const title = episodes_titles?.[episodeNumber - 1];
-                    if (!title) {
-                      return episodeNumber;
-                    }
-                    // 如果匹配"第X集"、"第X话"、"X集"、"X话"格式，提取中间的数字
-                    const match = title.match(/(?:第)?(\d+)(?:集|话)/);
-                    if (match) {
-                      return match[1];
-                    }
-                    return title;
-                  })()}
-                </button>
-              );
-            })}
+              // 过滤掉被屏蔽的集数，但保持原有索引
+              return episodes
+                .filter(episodeNumber => !isEpisodeFiltered(episodeNumber))
+                .map((episodeNumber) => {
+                  const isActive = episodeNumber === value;
+                  return (
+                    <button
+                      key={episodeNumber}
+                      onClick={() => handleEpisodeClick(episodeNumber - 1)}
+                      className={`h-10 min-w-10 px-3 py-2 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap font-mono
+                        ${isActive
+                          ? 'bg-green-500 text-white shadow-lg shadow-green-500/25 dark:bg-green-600'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20'
+                        }`.trim()}
+                    >
+                      {(() => {
+                        const title = episodes_titles?.[episodeNumber - 1];
+                        if (!title) {
+                          return episodeNumber;
+                        }
+                        // 如果匹配"第X集"、"第X话"、"X集"、"X话"格式，提取中间的数字
+                        const match = title.match(/(?:第)?(\d+)(?:集|话)/);
+                        if (match) {
+                          return match[1];
+                        }
+                        return title;
+                      })()}
+                    </button>
+                  );
+                });
+            })()}
           </div>
         </>
       )}
@@ -833,6 +893,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             )}
         </div>
       )}
+
+      {/* 集数过滤设置弹窗 */}
+      <EpisodeFilterSettings
+        isOpen={showFilterSettings}
+        onClose={() => setShowFilterSettings(false)}
+        onConfigUpdate={(config) => {
+          onFilterConfigUpdate?.(config);
+        }}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };
