@@ -28,7 +28,8 @@ interface TMDBSearchResponse {
 export async function searchTMDB(
   apiKey: string,
   query: string,
-  proxy?: string
+  proxy?: string,
+  year?: number
 ): Promise<{ code: number; result: TMDBSearchResult | null }> {
   try {
     if (!apiKey) {
@@ -36,8 +37,13 @@ export async function searchTMDB(
     }
 
     // 使用 multi search 同时搜索电影和电视剧
-    const url = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&language=zh-CN&query=${encodeURIComponent(query)}&page=1`;
-	
+    let url = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&language=zh-CN&query=${encodeURIComponent(query)}&page=1`;
+
+    // 如果提供了年份，添加到搜索参数中
+    if (year) {
+      url += `&year=${year}`;
+    }
+
     const fetchOptions: any = proxy
       ? {
           agent: new HttpsProxyAgent(proxy, {

@@ -201,18 +201,19 @@ async function performScan(
       }
 
       try {
-        // 解析文件夹名称，提取季度信息
+        // 解析文件夹名称，提取季度信息和年份
         const seasonInfo = parseSeasonFromTitle(folder.name);
         const searchQuery = seasonInfo.cleanTitle || folder.name;
 
         console.log(`[OpenList Refresh] 处理文件夹: ${folder.name}`);
-        console.log(`[OpenList Refresh] 清理后标题: ${searchQuery}, 季度: ${seasonInfo.seasonNumber}`);
+        console.log(`[OpenList Refresh] 清理后标题: ${searchQuery}, 季度: ${seasonInfo.seasonNumber}, 年份: ${seasonInfo.year}`);
 
-        // 搜索 TMDB（使用清理后的标题）
+        // 搜索 TMDB（使用清理后的标题和年份）
         const searchResult = await searchTMDB(
           tmdbApiKey,
           searchQuery,
-          tmdbProxy
+          tmdbProxy,
+          seasonInfo.year || undefined
         );
 
         if (searchResult.code === 200 && searchResult.result) {

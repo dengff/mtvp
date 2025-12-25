@@ -4,10 +4,12 @@
  */
 
 export interface SeasonInfo {
-  /** 清理后的标题（移除季度标识） */
+  /** 清理后的标题（移除季度标识和年份） */
   cleanTitle: string;
   /** 季度编号，如果未识别则为 null */
   seasonNumber: number | null;
+  /** 年份，如果未识别则为 null */
+  year: number | null;
   /** 原始标题 */
   originalTitle: string;
 }
@@ -21,11 +23,13 @@ export interface SeasonInfo {
  * - 第一季, 第1季, 第01季
  * - [第一季], [第1季]
  * - 第一部, 第1部
+ * - 年份: 2023, [2023], (2023)
  */
 export function parseSeasonFromTitle(title: string): SeasonInfo {
   const originalTitle = title;
   let cleanTitle = title;
   let seasonNumber: number | null = null;
+  let year: number | null = null;
 
   // 定义季度匹配模式（按优先级排序）
   const patterns = [
@@ -88,9 +92,30 @@ export function parseSeasonFromTitle(title: string): SeasonInfo {
     }
   }
 
+  // 提取年份（支持多种格式）
+  const yearPatterns = [
+    /\[(\d{4})\]/, // [2023]
+    /\((\d{4})\)/, // (2023)
+    /\b(\d{4})\b/, // 2023
+  ];
+
+  for (const yearPattern of yearPatterns) {
+    const yearMatch = cleanTitle.match(yearPattern);
+    if (yearMatch) {
+      const extractedYear = parseInt(yearMatch[1], 10);
+      // 验证年份合理性（1900-2100）
+      if (extractedYear >= 1900 && extractedYear <= 2100) {
+        year = extractedYear;
+        cleanTitle = cleanTitle.replace(yearPattern, '').trim();
+        break;
+      }
+    }
+  }
+
   // 清理标题：移除空的方括号和多余的空格
   cleanTitle = cleanTitle
     .replace(/\[\s*\]/g, '') // 移除空方括号
+    .replace(/\(\s*\)/g, '') // 移除空圆括号
     .replace(/\s+/g, ' ') // 合并多个空格
     .replace(/[·\-_\s]+$/, '') // 移除末尾的特殊字符
     .trim();
@@ -98,6 +123,7 @@ export function parseSeasonFromTitle(title: string): SeasonInfo {
   return {
     cleanTitle,
     seasonNumber,
+    year,
     originalTitle,
   };
 }
