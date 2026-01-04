@@ -16,6 +16,7 @@ import { DownloadProvider } from '../contexts/DownloadContext';
 import { DownloadBubble } from '../components/DownloadBubble';
 import { DownloadPanel } from '../components/DownloadPanel';
 import { DanmakuCacheCleanup } from '../components/DanmakuCacheCleanup';
+import TopProgressBar from '../components/TopProgressBar';
 
 const inter = Inter({ subsets: ['latin'] });
 export const dynamic = 'force-dynamic';
@@ -194,6 +195,7 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <TopProgressBar />
           <SiteProvider siteName={siteName} announcement={announcement} tmdbApiKey={tmdbApiKey}>
             <WatchRoomProvider>
               <DownloadProvider>
