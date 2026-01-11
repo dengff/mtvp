@@ -390,6 +390,7 @@ interface CollapsibleTabProps {
   isExpanded: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  isParent?: boolean;
 }
 
 const CollapsibleTab = ({
@@ -398,25 +399,38 @@ const CollapsibleTab = ({
   isExpanded,
   onToggle,
   children,
+  isParent = false,
 }: CollapsibleTabProps) => {
   return (
-    <div className='rounded-xl shadow-sm mb-4 overflow-hidden bg-white/80 backdrop-blur-md dark:bg-gray-800/50 dark:ring-1 dark:ring-gray-700'>
+    <div className={`rounded-xl shadow-sm mb-4 overflow-hidden ${
+      isParent
+        ? 'bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 ring-2 ring-yellow-400/50 dark:ring-yellow-600/50'
+        : 'bg-white/80 backdrop-blur-md dark:bg-gray-800/50 dark:ring-1 dark:ring-gray-700'
+    }`}>
       <button
         onClick={onToggle}
-        className='w-full px-6 py-4 flex items-center justify-between bg-gray-50/70 dark:bg-gray-800/60 hover:bg-gray-100/80 dark:hover:bg-gray-700/60 transition-colors'
+        className={`w-full px-6 py-4 flex items-center justify-between transition-colors ${
+          isParent
+            ? 'bg-yellow-100/50 dark:bg-yellow-900/30 hover:bg-yellow-100/70 dark:hover:bg-yellow-900/40'
+            : 'bg-gray-50/70 dark:bg-gray-800/60 hover:bg-gray-100/80 dark:hover:bg-gray-700/60'
+        }`}
       >
         <div className='flex items-center gap-3'>
           {icon}
-          <h3 className='text-lg font-medium text-gray-900 dark:text-gray-100'>
+          <h3 className={`text-lg font-medium ${
+            isParent
+              ? 'text-yellow-900 dark:text-yellow-200'
+              : 'text-gray-900 dark:text-gray-100'
+          }`}>
             {title}
           </h3>
         </div>
-        <div className='text-gray-500 dark:text-gray-400'>
+        <div className={isParent ? 'text-yellow-700 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400'}>
           {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </div>
       </button>
 
-      {isExpanded && <div className='px-6 py-4'>{children}</div>}
+      {isExpanded && <div className={isParent ? 'px-0.5 md:px-6 py-4' : 'px-6 py-4'}>{children}</div>}
     </div>
   );
 };
@@ -9873,8 +9887,10 @@ function AdminPageClient() {
   const [expandedTabs, setExpandedTabs] = useState<{ [key: string]: boolean }>({
     userConfig: false,
     videoSource: false,
+    mediaLibrary: false,
     openListConfig: false,
     embyConfig: false,
+    xiaoyaConfig: false,
     aiConfig: false,
     liveSource: false,
     siteConfig: false,
@@ -10176,40 +10192,53 @@ function AdminPageClient() {
               <LiveSourceConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
-            {/* 私人影库配置标签 */}
+            {/* 私人影库大类 */}
             <CollapsibleTab
               title='私人影库'
               icon={
-                <FolderOpen size={20} className='text-gray-600 dark:text-gray-400' />
+                <Database size={20} className='text-yellow-700 dark:text-yellow-400' />
               }
-              isExpanded={expandedTabs.openListConfig}
-              onToggle={() => toggleTab('openListConfig')}
+              isExpanded={expandedTabs.mediaLibrary}
+              onToggle={() => toggleTab('mediaLibrary')}
+              isParent={true}
             >
-              <OpenListConfigComponent config={config} refreshConfig={fetchConfig} />
-            </CollapsibleTab>
+              <div className='space-y-4'>
+                {/* Openlist配置子标签 */}
+                <CollapsibleTab
+                  title='Openlist配置'
+                  icon={
+                    <FolderOpen size={20} className='text-gray-600 dark:text-gray-400' />
+                  }
+                  isExpanded={expandedTabs.openListConfig}
+                  onToggle={() => toggleTab('openListConfig')}
+                >
+                  <OpenListConfigComponent config={config} refreshConfig={fetchConfig} />
+                </CollapsibleTab>
 
-            {/* Emby 媒体库标签 */}
-            <CollapsibleTab
-              title='Emby 媒体库'
-              icon={
-                <FolderOpen size={20} className='text-gray-600 dark:text-gray-400' />
-              }
-              isExpanded={expandedTabs.embyConfig}
-              onToggle={() => toggleTab('embyConfig')}
-            >
-              <EmbyConfigComponent config={config} refreshConfig={fetchConfig} />
-            </CollapsibleTab>
+                {/* Emby 媒体库子标签 */}
+                <CollapsibleTab
+                  title='Emby 媒体库'
+                  icon={
+                    <FolderOpen size={20} className='text-gray-600 dark:text-gray-400' />
+                  }
+                  isExpanded={expandedTabs.embyConfig}
+                  onToggle={() => toggleTab('embyConfig')}
+                >
+                  <EmbyConfigComponent config={config} refreshConfig={fetchConfig} />
+                </CollapsibleTab>
 
-            {/* 小雅配置标签 */}
-            <CollapsibleTab
-              title='小雅配置'
-              icon={
-                <FolderOpen size={20} className='text-gray-600 dark:text-gray-400' />
-              }
-              isExpanded={expandedTabs.xiaoyaConfig}
-              onToggle={() => toggleTab('xiaoyaConfig')}
-            >
-              <XiaoyaConfigComponent config={config} refreshConfig={fetchConfig} />
+                {/* 小雅配置子标签 */}
+                <CollapsibleTab
+                  title='小雅配置'
+                  icon={
+                    <FolderOpen size={20} className='text-gray-600 dark:text-gray-400' />
+                  }
+                  isExpanded={expandedTabs.xiaoyaConfig}
+                  onToggle={() => toggleTab('xiaoyaConfig')}
+                >
+                  <XiaoyaConfigComponent config={config} refreshConfig={fetchConfig} />
+                </CollapsibleTab>
+              </div>
             </CollapsibleTab>
 
             {/* AI配置标签 */}
